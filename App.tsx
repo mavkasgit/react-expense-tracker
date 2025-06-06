@@ -1,4 +1,4 @@
-mport React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { RawExpenseData, Category, ProcessedExpense, AppView, SubCategory } from './types';
 import { USER_REQUESTED_DEFAULT_CATEGORIES } from './constants'; 
