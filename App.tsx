@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+mport React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { RawExpenseData, Category, ProcessedExpense, AppView, SubCategory } from './types';
 import { USER_REQUESTED_DEFAULT_CATEGORIES } from './constants'; 
@@ -21,6 +21,14 @@ const AppContent: React.FC = () => {
   const categories = useAppSelector(state => state.expenses.categories);
 
   const [activeView, setActiveView] = useState<string>(AppView.Management);
+
+  useEffect(() => {
+    console.log('Current expenses:', expenses);
+  }, [expenses]);
+
+  useEffect(() => {
+    console.log('Current categories:', categories);
+  }, [categories]);
 
   useEffect(() => {
     const sortedCategories = [...categories].sort((a, b) => a.order - b.order);
