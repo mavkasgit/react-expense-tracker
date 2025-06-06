@@ -8,7 +8,7 @@ export interface Expense {
   date: string
 }
 
-interface ExpensesState {
+export interface ExpensesState {
   items: Expense[]
   categories: string[]
 }

@@ -30,17 +30,6 @@ const AppContent: React.FC = () => {
     console.log('Current categories:', categories);
   }, [categories]);
 
-  useEffect(() => {
-    const sortedCategories = [...categories].sort((a, b) => a.order - b.order);
-    console.log("Saving categories to localStorage:", sortedCategories);
-    localStorage.setItem('expenseTrackerCategories', JSON.stringify(sortedCategories));
-  }, [categories]);
-
-  useEffect(() => {
-    console.log("Saving expenses to localStorage:", expenses);
-    localStorage.setItem('expenseTrackerExpenses', JSON.stringify(expenses));
-  }, [expenses]);
-  
   const reProcessAllExpenses = useCallback((currentCategoriesToProcessWith: Category[]) => {
     console.log("reProcessAllExpenses triggered with categories:", currentCategoriesToProcessWith);
     dispatch(removeExpense(expenses));
