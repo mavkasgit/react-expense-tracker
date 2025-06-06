@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { RawExpenseData, Category, ProcessedExpense, AppView, SubCategory } from './types';
@@ -10,111 +9,17 @@ import UncategorizedLog from './components/UncategorizedLog';
 import ExpenseDisplayTable from './components/ExpenseDisplayTable';
 import TabsNavigator from './components/TabsNavigator';
 import { TrashIcon } from './components/icons';
+import { Provider } from 'react-redux';
+import { PersistGate } from 'redux-persist/integration/react';
+import { store, persistor } from './store';
+import { useAppDispatch, useAppSelector } from './store';
+import { addExpense, removeExpense, addCategory, removeCategory } from './features/expensesSlice';
 
-const App: React.FC = () => {
-  const [categories, setCategories] = useState<Category[]>(() => {
-    const savedCategories = localStorage.getItem('expenseTrackerCategories');
-    try {
-        if (savedCategories) {
-            let parsed = JSON.parse(savedCategories) as Category[];
-            if (Array.isArray(parsed) && parsed.every(item => item && typeof item.id === 'string' && typeof item.name === 'string')) {
-                 console.log("DEBUG: Initializing categories from localStorage.");
-                 parsed = parsed.map((cat, index) => ({
-                    ...cat,
-                    order: (typeof cat.order === 'number' && !isNaN(cat.order)) ? cat.order : index,
-                    subCategories: Array.isArray(cat.subCategories) ? 
-                                   cat.subCategories.map(sc => ({
-                                       id: sc.id || uuidv4(), 
-                                       name: sc.name || "Без имени", 
-                                       keywords: Array.isArray(sc.keywords) ? sc.keywords.map(k => String(k).toLowerCase()) : []
-                                   })) : [] 
-                })).sort((a, b) => a.order - b.order);
-                return parsed;
-            }
-        }
-    } catch (error) {
-        console.error("Failed to parse categories from localStorage:", error);
-    }
-    
-    console.log("DEBUG: Initializing categories from USER_REQUESTED_DEFAULT_CATEGORIES (constants.ts).");
-    const defaultCats = USER_REQUESTED_DEFAULT_CATEGORIES.sort((a, b) => a.order - b.order);
-    
-    if (defaultCats.length > 0 && defaultCats[0].name === "Повседневные" && 
-        defaultCats[0].subCategories.length > 0 && defaultCats[0].subCategories[0].name === "Продукты") {
-        console.log(`DEBUG: Initial default keywords for 'Повседневные -> Продукты':`, JSON.stringify(defaultCats[0].subCategories[0].keywords));
-    } else if (defaultCats.length > 0 && defaultCats[0].subCategories.length > 0) {
-        const firstMainCatName = defaultCats[0].name;
-        const firstSubCat = defaultCats[0].subCategories[0];
-        console.log(`DEBUG: Initial default keywords for '${firstSubCat.name}' under '${firstMainCatName}':`, JSON.stringify(firstSubCat.keywords));
-    }
-    return defaultCats; 
-  });
+const AppContent: React.FC = () => {
+  const dispatch = useAppDispatch();
+  const expenses = useAppSelector(state => state.expenses.items);
+  const categories = useAppSelector(state => state.expenses.categories);
 
-  const [allExpenses, setAllExpenses] = useState<ProcessedExpense[]>(() => {
-    console.log("DEBUG: Attempting to initialize allExpenses state.");
-    const savedExpenses = localStorage.getItem('expenseTrackerExpenses');
-    if (savedExpenses) {
-        try {
-            const parsedFromStorage = JSON.parse(savedExpenses);
-            console.log("DEBUG: Parsed expenses from localStorage:", parsedFromStorage);
-
-            if (Array.isArray(parsedFromStorage)) {
-                const validExpenses: ProcessedExpense[] = [];
-                parsedFromStorage.forEach((exp: any, index: number) => {
-                    if (!exp || typeof exp !== 'object') {
-                        console.warn(`DEBUG: Skipping invalid expense entry (not an object) at index ${index} from localStorage.`);
-                        return;
-                    }
-                    if (typeof exp.id !== 'string') {
-                         console.warn(`DEBUG: Skipping expense entry with missing or invalid ID at index ${index} from localStorage. Expense:`, exp);
-                        return;
-                    }
-
-                    let parsedDate: Date;
-                    if (typeof exp.date === 'string') {
-                        parsedDate = new Date(exp.date);
-                    } else {
-                        console.warn(`DEBUG: Expense ID ${exp.id} has invalid date type (not a string):`, exp.date, `. Skipping.`);
-                        return; 
-                    }
-
-                    if (isNaN(parsedDate.getTime())) {
-                        console.warn(`DEBUG: Expense ID ${exp.id} has invalid date value after parsing: "${exp.date}". Original type: ${typeof exp.date}. Skipping.`);
-                        return; 
-                    }
-
-                    const amount = parseFloat(exp.amount);
-                    if (isNaN(amount)) {
-                        console.warn(`DEBUG: Expense ID ${exp.id} has invalid amount: "${exp.amount}". Skipping.`);
-                        return;
-                    }
-                    
-                    validExpenses.push({
-                        id: exp.id,
-                        date: parsedDate,
-                        amount: amount,
-                        currency: typeof exp.currency === 'string' ? exp.currency : 'BYN',
-                        comment: typeof exp.comment === 'string' ? exp.comment : '',
-                        fullComment: typeof exp.fullComment === 'string' ? exp.fullComment : (exp.comment || ''),
-                        categoryId: typeof exp.categoryId === 'string' ? exp.categoryId : undefined,
-                        subCategoryId: typeof exp.subCategoryId === 'string' ? exp.subCategoryId : undefined,
-                        isUnidentified: typeof exp.isUnidentified === 'boolean' ? exp.isUnidentified : true,
-                    });
-                });
-                console.log(`DEBUG: Loaded ${validExpenses.length} valid expenses from localStorage.`);
-                return validExpenses.sort((a,b) => b.date.getTime() - a.date.getTime());
-            } else {
-                console.warn("DEBUG: Saved expenses in localStorage is not an array.");
-            }
-        } catch (error) {
-            console.error("DEBUG: Failed to parse expenses from localStorage:", error);
-        }
-    } else {
-        console.log("DEBUG: No expenses found in localStorage. Initializing as empty array.");
-    }
-    return [];
-  });
-  
   const [activeView, setActiveView] = useState<string>(AppView.Management);
 
   useEffect(() => {
@@ -124,49 +29,38 @@ const App: React.FC = () => {
   }, [categories]);
 
   useEffect(() => {
-    console.log("Saving expenses to localStorage:", allExpenses);
-    localStorage.setItem('expenseTrackerExpenses', JSON.stringify(allExpenses));
-  }, [allExpenses]);
+    console.log("Saving expenses to localStorage:", expenses);
+    localStorage.setItem('expenseTrackerExpenses', JSON.stringify(expenses));
+  }, [expenses]);
   
   const reProcessAllExpenses = useCallback((currentCategoriesToProcessWith: Category[]) => {
     console.log("reProcessAllExpenses triggered with categories:", currentCategoriesToProcessWith);
-    setAllExpenses(prev => {
-        console.log("reProcessAllExpenses: prev expenses count", prev.length);
-        const reProcessed = prev.filter(exp => exp && exp.date && !isNaN(exp.date.getTime())).map(exp => {
-            const rawExpData: RawExpenseData = { 
-                id: exp.id, 
-                dateStr: `${String(exp.date.getDate()).padStart(2, '0')}.${String(exp.date.getMonth() + 1).padStart(2, '0')}.${exp.date.getFullYear()}`,
-                amountStr: exp.amount.toString(),
-                currency: exp.currency,
-                fullComment: exp.fullComment,
-            };
-            const processedPart = initialProcessExpense(rawExpData, currentCategoriesToProcessWith);
-            return { id: exp.id, ...processedPart };
-        }).sort((a,b) => {
-            const timeA = a.date && !isNaN(a.date.getTime()) ? a.date.getTime() : 0;
-            const timeB = b.date && !isNaN(b.date.getTime()) ? b.date.getTime() : 0;
-            return timeB - timeA;
-        });
-        console.log("reProcessAllExpenses: new expenses count", reProcessed.length);
-        return reProcessed;
+    dispatch(removeExpense(expenses));
+    const reProcessed = expenses.filter(exp => exp && exp.date && !isNaN(exp.date.getTime())).map(exp => {
+      const rawExpData: RawExpenseData = { 
+        id: exp.id, 
+        dateStr: `${String(exp.date.getDate()).padStart(2, '0')}.${String(exp.date.getMonth() + 1).padStart(2, '0')}.${exp.date.getFullYear()}`,
+        amountStr: exp.amount.toString(),
+        currency: exp.currency,
+        fullComment: exp.fullComment,
+      };
+      const processedPart = initialProcessExpense(rawExpData, currentCategoriesToProcessWith);
+      return { id: exp.id, ...processedPart };
+    }).sort((a,b) => {
+      const timeA = a.date && !isNaN(a.date.getTime()) ? a.date.getTime() : 0;
+      const timeB = b.date && !isNaN(b.date.getTime()) ? b.date.getTime() : 0;
+      return timeB - timeA;
     });
-  }, []); 
+    console.log("reProcessAllExpenses: new expenses count", reProcessed.length);
+    dispatch(addExpense(reProcessed));
+  }, [expenses, dispatch]); 
 
   const handleProcessNewExpenses = useCallback((rawExpensesData: RawExpenseData[]) => {
     console.log("handleProcessNewExpenses: processing new raw expenses", rawExpensesData);
     const newProcessedExpenses = processRawExpenses(rawExpensesData, categories);
     console.log("handleProcessNewExpenses: new processed expenses", newProcessedExpenses);
-    setAllExpenses(prevExpenses => 
-        [...prevExpenses, ...newProcessedExpenses]
-        .filter(exp => exp && exp.date && !isNaN(exp.date.getTime())) 
-        .sort((a,b) => {
-            const timeA = a.date && !isNaN(a.date.getTime()) ? a.date.getTime() : 0;
-            const timeB = b.date && !isNaN(b.date.getTime()) ? b.date.getTime() : 0;
-            return timeB - timeA;
-        })
-    );
-  }, [categories]);
-
+    dispatch(addExpense(newProcessedExpenses));
+  }, [categories, dispatch]);
 
   const handleAddMainCategory = useCallback((mainCategoryName: string): string | undefined => {
     const trimmedName = mainCategoryName.trim();
@@ -186,9 +80,9 @@ const App: React.FC = () => {
         order: newOrder, 
         subCategories: [] 
     };
-    setCategories(prev => [...prev, newCategoryToAdd].sort((a,b) => a.order - b.order));
+    dispatch(addCategory(newCategoryToAdd));
     return newCategoryId;
-  }, [categories]);
+  }, [categories, dispatch]);
   
   const handleUpdateMainCategoryName = useCallback((mainCategoryId: string, newName: string) => {
     const trimmedName = newName.trim();
@@ -196,20 +90,10 @@ const App: React.FC = () => {
         alert("Название основной категории не может быть пустым.");
         return;
     }
-    setCategories(prev => {
-        if (prev.find(c => c.id !== mainCategoryId && c.name.toLowerCase() === trimmedName.toLowerCase())) {
-            alert(`Основная категория с именем "${trimmedName}" уже существует.`);
-            return prev;
-        }
-        const updated = prev.map(c => c.id === mainCategoryId ? { ...c, name: trimmedName } : c).sort((a,b) => a.order - b.order);
-        const oldCategory = prev.find(c => c.id === mainCategoryId);
-        if (oldCategory && oldCategory.name !== trimmedName) {
-            console.log("DEBUG: Main category name changed. Re-processing expenses.");
-            reProcessAllExpenses(updated); 
-        }
-        return updated;
-    });
-  }, [reProcessAllExpenses, categories]);
+    dispatch(removeCategory(mainCategoryId));
+    const updated = categories.map(c => c.id === mainCategoryId ? { ...c, name: trimmedName } : c).sort((a,b) => a.order - b.order);
+    dispatch(addCategory(updated));
+  }, [categories, dispatch]);
 
   const reIndexCategoryOrder = (cats: Category[]): Category[] => {
     return cats.sort((a, b) => a.order - b.order).map((cat, index) => ({ ...cat, order: index }));
@@ -225,18 +109,13 @@ const App: React.FC = () => {
     }
     console.log(`DEBUG: Executing deletion for main category ${mainCategoryId} WITHOUT confirmation.`);
 
-    setCategories(prev => {
-        const filteredCategories = prev.filter(cat => cat.id !== mainCategoryId);
-        const updatedCategories = reIndexCategoryOrder(filteredCategories);
-        reProcessAllExpenses(updatedCategories); 
-        return updatedCategories;
-    });
+    dispatch(removeCategory(mainCategoryId));
    
     if (activeView === categoryToDelete.name) {
         console.log(`DEBUG: Current view was the deleted category. Switching to AllExpenses.`);
         setActiveView(AppView.AllExpenses);
     }
-  }, [categories, activeView, reProcessAllExpenses, setActiveView]);
+  }, [categories, activeView, dispatch]);
 
   const handleAddSubCategory = useCallback((mainCategoryId: string, subCategoryName: string): string | undefined => {
     const trimmedName = subCategoryName.trim();
@@ -246,23 +125,22 @@ const App: React.FC = () => {
     }
     let newSubIdValue = uuidv4(); 
     let success = true;
-    setCategories(prev => {
-        const updatedCategories = prev.map(mc => {
-            if (mc.id === mainCategoryId) {
-                if (mc.subCategories.find(sc => sc.name.toLowerCase() === trimmedName.toLowerCase())) {
-                    alert(`Подкатегория "${trimmedName}" уже существует в категории "${mc.name}".`);
-                    success = false;
-                    return mc;
-                }
-                const newSub: SubCategory = { id: newSubIdValue, name: trimmedName, keywords: [] };
-                return { ...mc, subCategories: [...mc.subCategories, newSub].sort((a,b) => a.name.localeCompare(b.name)) };
+    dispatch(removeCategory(mainCategoryId));
+    const updatedCategories = categories.map(mc => {
+        if (mc.id === mainCategoryId) {
+            if (mc.subCategories.find(sc => sc.name.toLowerCase() === trimmedName.toLowerCase())) {
+                alert(`Подкатегория "${trimmedName}" уже существует в категории "${mc.name}".`);
+                success = false;
+                return mc;
             }
-            return mc;
-        });
-        return updatedCategories;
+            const newSub: SubCategory = { id: newSubIdValue, name: trimmedName, keywords: [] };
+            return { ...mc, subCategories: [...mc.subCategories, newSub].sort((a,b) => a.name.localeCompare(b.name)) };
+        }
+        return mc;
     });
+    dispatch(addCategory(updatedCategories));
     return success ? newSubIdValue : undefined;
-  }, []);
+  }, [categories, dispatch]);
 
   const handleUpdateSubCategory = useCallback((mainCategoryId: string, subCategoryId: string, newName: string) => {
     const trimmedName = newName.trim();
@@ -270,34 +148,29 @@ const App: React.FC = () => {
         alert("Название подкатегории не может быть пустым.");
         return;
     }
-    setCategories(prev => {
-        let nameActuallyChanged = false;
-        const updatedCategories = prev.map(mc => {
-            if (mc.id === mainCategoryId) {
-                const oldSubCategory = mc.subCategories.find(sc => sc.id === subCategoryId);
-                if (mc.subCategories.find(sc => sc.id !== subCategoryId && sc.name.toLowerCase() === trimmedName.toLowerCase())) {
-                    alert(`Подкатегория с именем "${trimmedName}" уже существует в категории "${mc.name}".`);
-                    return mc;
-                }
-                if (oldSubCategory && oldSubCategory.name !== trimmedName) {
-                    nameActuallyChanged = true;
-                }
-                return { 
-                    ...mc, 
-                    subCategories: mc.subCategories.map(sc => 
-                        sc.id === subCategoryId ? { ...sc, name: trimmedName } : sc
-                    ).sort((a,b) => a.name.localeCompare(b.name))
-                };
+    dispatch(removeCategory(mainCategoryId));
+    const updatedCategories = categories.map(mc => {
+        if (mc.id === mainCategoryId) {
+            const oldSubCategory = mc.subCategories.find(sc => sc.id === subCategoryId);
+            if (mc.subCategories.find(sc => sc.id !== subCategoryId && sc.name.toLowerCase() === trimmedName.toLowerCase())) {
+                alert(`Подкатегория с именем "${trimmedName}" уже существует в категории "${mc.name}".`);
+                return mc;
             }
-            return mc;
-        });
-        if (nameActuallyChanged) {
-            console.log("DEBUG: Subcategory name changed. Re-processing expenses.");
-            reProcessAllExpenses(updatedCategories);
+            if (oldSubCategory && oldSubCategory.name !== trimmedName) {
+                console.log("DEBUG: Subcategory name changed. Re-processing expenses.");
+                reProcessAllExpenses(updatedCategories);
+            }
+            return { 
+                ...mc, 
+                subCategories: mc.subCategories.map(sc => 
+                    sc.id === subCategoryId ? { ...sc, name: trimmedName } : sc
+                ).sort((a,b) => a.name.localeCompare(b.name))
+            };
         }
-        return updatedCategories;
+        return mc;
     });
-  }, [reProcessAllExpenses]);
+    dispatch(addCategory(updatedCategories));
+  }, [reProcessAllExpenses, dispatch]);
 
   const handleDeleteSubCategory = useCallback((mainCategoryId: string, subCategoryId: string) => {
      console.log(`DEBUG: handleDeleteSubCategory called with MainID: ${mainCategoryId}, SubID: ${subCategoryId}`);
@@ -310,64 +183,50 @@ const App: React.FC = () => {
      }
      console.log(`DEBUG: Executing deletion for subcategory ${subCategoryId} from main category ${mainCat.name} WITHOUT confirmation.`);
 
-    setCategories(prev => {
-        const updatedCategories = prev.map(mc => 
-            mc.id === mainCategoryId 
-                ? { ...mc, subCategories: mc.subCategories.filter(sc => sc.id !== subCategoryId) } 
-                : mc
-        );
-        reProcessAllExpenses(updatedCategories);
-        return updatedCategories;
-    });
-  }, [categories, reProcessAllExpenses]);
+    dispatch(removeCategory(mainCategoryId));
+  }, [categories, dispatch]);
 
   const handleAddKeywordToSubCategory = useCallback((mainCategoryId: string, subCategoryId: string, keyword: string) => {
     const trimmedKeyword = keyword.trim().toLowerCase();
     if (!trimmedKeyword) return;
     
-    setCategories(prevCategories => {
-      let categoriesWereActuallyUpdated = false;
-      const updatedCategories = prevCategories.map(mc => {
-        if (mc.id === mainCategoryId) {
-          return {
-            ...mc,
-            subCategories: mc.subCategories.map(sc => {
-              if (sc.id === subCategoryId) {
-                if (sc.keywords.map(k => k.toLowerCase()).includes(trimmedKeyword)) {
-                  return sc; 
-                }
-                categoriesWereActuallyUpdated = true;
-                return { ...sc, keywords: [...sc.keywords, trimmedKeyword].sort() };
+    dispatch(removeCategory(mainCategoryId));
+    const updatedCategories = categories.map(mc => {
+      if (mc.id === mainCategoryId) {
+        return {
+          ...mc,
+          subCategories: mc.subCategories.map(sc => {
+            if (sc.id === subCategoryId) {
+              if (sc.keywords.map(k => k.toLowerCase()).includes(trimmedKeyword)) {
+                return sc; 
               }
-              return sc;
-            })
-          };
-        }
-        return mc;
-      });
-
-      if(categoriesWereActuallyUpdated) {
-          console.log(`DEBUG: Keyword added. Re-processing all expenses with updated categories.`);
-          reProcessAllExpenses(updatedCategories); 
+              return { ...sc, keywords: [...sc.keywords, trimmedKeyword].sort() };
+            }
+            return sc;
+          })
+        };
       }
-      return updatedCategories;
+      return mc;
     });
-  }, [reProcessAllExpenses]);
+    dispatch(addCategory(updatedCategories));
+  }, [dispatch]);
 
   const handleDeleteKeywordFromSubCategory = useCallback((mainCategoryId: string, subCategoryId: string, keyword: string) => {
     const trimmedKeyword = keyword.trim().toLowerCase();
     
-    setCategories(prevCategories => {
-      let categoriesWereActuallyUpdated = false;
-      const updatedCategories = prevCategories.map(mc => {
-        if (mc.id === mainCategoryId) {
-          return {
-            ...mc,
-            subCategories: mc.subCategories.map(sc => {
-              if (sc.id === subCategoryId) {
-                 const initialLength = sc.keywords.length;
-                 const updatedKeywordsArr = sc.keywords.filter(k => k.toLowerCase() !== trimmedKeyword);
-                 if(updatedKeywordsArr.length < initialLength) categoriesWereActuallyUpdated = true;
+    dispatch(removeCategory(mainCategoryId));
+    const updatedCategories = categories.map(mc => {
+      if (mc.id === mainCategoryId) {
+        return {
+          ...mc,
+          subCategories: mc.subCategories.map(sc => {
+            if (sc.id === subCategoryId) {
+               const initialLength = sc.keywords.length;
+               const updatedKeywordsArr = sc.keywords.filter(k => k.toLowerCase() !== trimmedKeyword);
+               if(updatedKeywordsArr.length < initialLength) {
+                 console.log(`DEBUG: Keyword deleted. Re-processing all expenses with updated categories.`);
+                 reProcessAllExpenses(updatedCategories);
+               }
                 return { ...sc, keywords: updatedKeywordsArr.sort() };
               }
               return sc;
@@ -376,14 +235,9 @@ const App: React.FC = () => {
         }
         return mc;
       });
-
-      if(categoriesWereActuallyUpdated) {
-          console.log(`DEBUG: Keyword deleted. Re-processing all expenses with updated categories.`);
-          reProcessAllExpenses(updatedCategories);
-      }
-      return updatedCategories;
     });
-  }, [reProcessAllExpenses]);
+    dispatch(addCategory(updatedCategories));
+  }, [reProcessAllExpenses, dispatch]);
 
   const handleCategorizeUnidentifiedExpense = useCallback((
     expenseId: string, 
@@ -400,52 +254,41 @@ const App: React.FC = () => {
          console.warn(`DEBUG: Keyword "${trimmedKeywordToSave}" provided for main category ${targetMainCategoryId}, but no subcategory selected. Keyword not saved.`);
     }
 
-
-    setAllExpenses(prevAllExpenses => {
-      const manuallyCategorizedExpense = prevAllExpenses.find(exp => exp.id === expenseId);
-      if (!manuallyCategorizedExpense) {
-        console.warn(`DEBUG: Could not find expense with ID ${expenseId} to categorize.`);
-        return prevAllExpenses;
+    dispatch(removeExpense(expenseId));
+    const updatedExpenses = expenses.map(exp => {
+      if (exp.id === expenseId) {
+        return { 
+          ...exp, 
+          categoryId: targetMainCategoryId,
+          subCategoryId: targetSubCategoryId,
+          isUnidentified: false 
+        };
       }
-      const commentToMatch = manuallyCategorizedExpense.fullComment;
-      console.log(`DEBUG: Manual categorization for expense ID ${expenseId}, comment: "${commentToMatch}" to MainCatID: ${targetMainCategoryId}, SubCatID: ${targetSubCategoryId}`);
-
-      const updatedExpenses = prevAllExpenses.map(exp => {
-        if (exp.id === expenseId) {
-          return { 
-            ...exp, 
-            categoryId: targetMainCategoryId,
-            subCategoryId: targetSubCategoryId,
-            isUnidentified: false 
-          };
-        }
-        if (exp.isUnidentified && exp.fullComment.toLowerCase() === commentToMatch.toLowerCase()) {
-          console.log(`DEBUG: Auto-categorizing expense ID ${exp.id} due to matching comment (case-insensitive): "${commentToMatch}"`);
-          return {
-            ...exp,
-            categoryId: targetMainCategoryId,
-            subCategoryId: targetSubCategoryId,
-            isUnidentified: false
-          };
-        }
-        return exp;
-      }).sort((a,b) => b.date.getTime() - a.date.getTime());
-      
-      return updatedExpenses;
-    });
-  }, [handleAddKeywordToSubCategory]);
+      if (exp.isUnidentified && exp.fullComment.toLowerCase() === trimmedKeywordToSave?.toLowerCase()) {
+        console.log(`DEBUG: Auto-categorizing expense ID ${exp.id} due to matching comment (case-insensitive): "${trimmedKeywordToSave}"`);
+        return {
+          ...exp,
+          categoryId: targetMainCategoryId,
+          subCategoryId: targetSubCategoryId,
+          isUnidentified: false
+        };
+      }
+      return exp;
+    }).sort((a,b) => b.date.getTime() - a.date.getTime());
+    
+    dispatch(addExpense(updatedExpenses));
+  }, [expenses, handleAddKeywordToSubCategory, dispatch]);
 
   const handleDeleteExpensePermanently = useCallback((expenseId: string) => {
     console.log(`DEBUG: Deleting expense permanently with ID: ${expenseId}`);
-    setAllExpenses(prevExpenses => prevExpenses.filter(exp => exp.id !== expenseId));
-  }, []);
-
+    dispatch(removeExpense(expenseId));
+  }, [dispatch]);
 
   const handleResetAllExpenses = useCallback(() => {
     console.log("DEBUG: handleResetAllExpenses called");
     console.log(`DEBUG: Executing resetting all expenses WITHOUT confirmation.`);
-    setAllExpenses([]);
-  }, []);
+    dispatch(removeExpense(expenses));
+  }, [expenses, dispatch]);
 
   const handleResetCategoriesToDefault = useCallback(() => {
     console.log("DEBUG: handleResetCategoriesToDefault called");
@@ -453,7 +296,8 @@ const App: React.FC = () => {
     
     const defaultCats = USER_REQUESTED_DEFAULT_CATEGORIES.sort((a,b) => a.order - b.order); 
     console.log("DEBUG: Using USER_REQUESTED_DEFAULT_CATEGORIES for reset:", defaultCats);
-    setCategories(defaultCats);
+    dispatch(removeExpense(expenses));
+    dispatch(addCategory(defaultCats));
     console.log("DEBUG: Calling reProcessAllExpenses after category reset.");
     reProcessAllExpenses(defaultCats); 
     
@@ -461,27 +305,27 @@ const App: React.FC = () => {
       console.log(`DEBUG: Current view ${activeView} not in new default categories. Switching to AllExpenses.`);
       setActiveView(AppView.AllExpenses);
     }
-  }, [activeView, reProcessAllExpenses, setActiveView]); 
+  }, [activeView, reProcessAllExpenses, expenses, dispatch]); 
 
   const handleMoveMainCategory = useCallback((categoryId: string, direction: 'up' | 'down') => {
-    setCategories(prev => {
-        const categoriesCopy = [...prev].sort((a, b) => a.order - b.order);
-        const index = categoriesCopy.findIndex(cat => cat.id === categoryId);
+    dispatch(removeCategory(categoryId));
+    const categoriesCopy = [...categories].sort((a, b) => a.order - b.order);
+    const index = categoriesCopy.findIndex(cat => cat.id === categoryId);
 
-        if (index === -1) return prev;
-        if (direction === 'up' && index === 0) return prev;
-        if (direction === 'down' && index === categoriesCopy.length - 1) return prev;
+    if (index === -1) return;
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === categoriesCopy.length - 1) return;
 
-        const targetIndex = direction === 'up' ? index - 1 : index + 1;
-        
-        const itemToMove = categoriesCopy[index];
-        const itemToSwapWith = categoriesCopy[targetIndex];
-        categoriesCopy[index] = itemToSwapWith;
-        categoriesCopy[targetIndex] = itemToMove;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    const itemToMove = categoriesCopy[index];
+    const itemToSwapWith = categoriesCopy[targetIndex];
+    categoriesCopy[index] = itemToSwapWith;
+    categoriesCopy[targetIndex] = itemToMove;
 
-        return categoriesCopy.map((cat, newOrder) => ({ ...cat, order: newOrder }));
-    });
-  }, []);
+    const updatedCategories = categoriesCopy.map((cat, newOrder) => ({ ...cat, order: newOrder }));
+    dispatch(addCategory(updatedCategories));
+  }, [categories, dispatch]);
   
   const handleMoveMainCategoryUp = useCallback((categoryId: string) => {
     handleMoveMainCategory(categoryId, 'up');
@@ -491,8 +335,7 @@ const App: React.FC = () => {
     handleMoveMainCategory(categoryId, 'down');
   }, [handleMoveMainCategory]);
 
-
-  const unidentifiedExpenses = allExpenses.filter(exp => exp.isUnidentified);
+  const unidentifiedExpenses = expenses.filter(exp => exp.isUnidentified);
   
   const sortedCategoriesForTabs = [...categories].sort((a,b) => a.order - b.order);
   const availableViewsForTabs: string[] = [
@@ -511,7 +354,6 @@ const App: React.FC = () => {
 
     return orderA - orderB;
   });
-
 
   const renderCurrentView = () => {
     switch (activeView) {
@@ -567,16 +409,16 @@ const App: React.FC = () => {
           </div>
         );
       case AppView.AllExpenses:
-        return <ExpenseDisplayTable expenses={allExpenses} categories={categories} title="Все Расходы" onDeleteCategorizedExpense={handleDeleteExpensePermanently} />;
+        return <ExpenseDisplayTable expenses={expenses} categories={categories} title="Все Расходы" onDeleteCategorizedExpense={handleDeleteExpensePermanently} />;
       default:
         const mainCategoryForView = categories.find(c => c.name === activeView);
         if (mainCategoryForView) {
-          const filteredExpenses = allExpenses.filter(exp => exp.categoryId === mainCategoryForView.id);
+          const filteredExpenses = expenses.filter(exp => exp.categoryId === mainCategoryForView.id);
           return <ExpenseDisplayTable expenses={filteredExpenses} categories={categories} title={`Расходы: ${mainCategoryForView.name}`} onDeleteCategorizedExpense={handleDeleteExpensePermanently} />;
         }
         console.warn(`DEBUG: Category view "${activeView}" not found. Defaulting to AllExpenses.`);
         setActiveView(AppView.AllExpenses); 
-        return <ExpenseDisplayTable expenses={allExpenses} categories={categories} title="Все Расходы" onDeleteCategorizedExpense={handleDeleteExpensePermanently} />;
+        return <ExpenseDisplayTable expenses={expenses} categories={categories} title="Все Расходы" onDeleteCategorizedExpense={handleDeleteExpensePermanently} />;
     }
   };
 
@@ -597,6 +439,16 @@ const App: React.FC = () => {
         <p>&copy; {new Date().getFullYear()} React Expense Tracker. Вдохновлено Google Sheets.</p>
       </footer>
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <Provider store={store}>
+      <PersistGate loading={null} persistor={persistor}>
+        <AppContent />
+      </PersistGate>
+    </Provider>
   );
 };
 
