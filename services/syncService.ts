@@ -1,7 +1,7 @@
 import { Expense, Category } from '../types';
 
 const API_URL = '/api/sync';
-const API_KEY = 'test-key-123'; // Временный ключ для тестирования
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || 'test-key-123'; // Используем переменную окружения
 
 export const syncService = {
   async fetchData() {
