@@ -198,19 +198,18 @@ const AppContent: React.FC = () => {
           ...mc,
           subCategories: mc.subCategories.map(sc => {
             if (sc.id === subCategoryId) {
-               const initialLength = sc.keywords.length;
-               const updatedKeywordsArr = sc.keywords.filter(k => k.toLowerCase() !== trimmedKeyword);
-               if(updatedKeywordsArr.length < initialLength) {
-                 reProcessAllExpenses(updatedCategories);
-               }
-                return { ...sc, keywords: updatedKeywordsArr.sort() };
+              const initialLength = sc.keywords.length;
+              const updatedKeywordsArr = sc.keywords.filter(k => k.toLowerCase() !== trimmedKeyword);
+              if(updatedKeywordsArr.length < initialLength) {
+                reProcessAllExpenses(updatedCategories);
               }
-              return sc;
-            })
-          };
-        }
-        return mc;
-      });
+              return { ...sc, keywords: updatedKeywordsArr.sort() };
+            }
+            return sc;
+          })
+        };
+      }
+      return mc;
     });
     dispatch(addCategory(updatedCategories));
   }, [reProcessAllExpenses, dispatch]);
