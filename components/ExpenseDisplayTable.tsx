@@ -93,3 +93,4 @@ const ExpenseDisplayTable: React.FC<ExpenseDisplayTableProps> = ({ expenses, cat
 };
 
 export default ExpenseDisplayTable;
+    

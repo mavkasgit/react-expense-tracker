@@ -284,3 +284,4 @@ const UncategorizedLog: React.FC<UncategorizedLogProps> = ({
 };
 
 export default UncategorizedLog;
+    
