@@ -7,6 +7,6 @@
     }
   ],
   "env": {
-    "API_KEY": "@api_key"
+    "NEXT_PUBLIC_API_KEY": "@api_key"
   }
 } 
