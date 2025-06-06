@@ -14,20 +14,24 @@ import { PersistGate } from 'redux-persist/integration/react';
 import { store, persistor } from './store';
 import { useAppDispatch, useAppSelector } from './store';
 import { addExpense, removeExpense, addCategory, removeCategory } from './features/expensesSlice';
+import LastUpdateTime from './components/LastUpdateTime';
 
 const AppContent: React.FC = () => {
   const dispatch = useAppDispatch();
   const expenses = useAppSelector(state => state.expenses.items);
   const categories = useAppSelector(state => state.expenses.categories);
+  const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
 
   const [activeView, setActiveView] = useState<string>(AppView.Management);
 
   useEffect(() => {
     console.log('Current expenses:', expenses);
+    setLastUpdateTime(Date.now());
   }, [expenses]);
 
   useEffect(() => {
     console.log('Current categories:', categories);
+    setLastUpdateTime(Date.now());
   }, [categories]);
 
   const reProcessAllExpenses = useCallback((currentCategoriesToProcessWith: Category[]) => {
@@ -435,6 +439,7 @@ const AppContent: React.FC = () => {
       <footer className="mt-12 text-center text-sm text-slate-500">
         <p>&copy; {new Date().getFullYear()} React Expense Tracker. Вдохновлено Google Sheets.</p>
       </footer>
+      <LastUpdateTime timestamp={lastUpdateTime} />
     </div>
   );
 };
