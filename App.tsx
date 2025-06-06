@@ -18,49 +18,67 @@ import LastUpdateTime from './components/LastUpdateTime';
 
 const AppContent: React.FC = () => {
   const dispatch = useDispatch();
-  const expenses = useSelector((state: any) => state.expenses.items);
-  const categories = useSelector((state: any) => state.expenses.categories);
+  const expenses = useSelector((state: any) => state.expenses?.items || []);
+  const categories = useSelector((state: any) => state.expenses?.categories || []);
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
   const [activeView, setActiveView] = useState<string>(AppView.Management);
 
   useEffect(() => {
-    setLastUpdateTime(Date.now());
+    if (expenses) {
+      setLastUpdateTime(Date.now());
+    }
   }, [expenses]);
 
   useEffect(() => {
-    setLastUpdateTime(Date.now());
+    if (categories) {
+      setLastUpdateTime(Date.now());
+    }
   }, [categories]);
 
   const reProcessAllExpenses = useCallback((currentCategoriesToProcessWith: Category[]) => {
+    if (!expenses || !currentCategoriesToProcessWith) return;
+    
     dispatch(removeExpense(expenses));
-    const reProcessed = expenses.filter(exp => exp && exp.date && !isNaN(exp.date.getTime())).map(exp => {
-      const rawExpData: RawExpenseData = { 
-        id: exp.id, 
-        dateStr: `${String(exp.date.getDate()).padStart(2, '0')}.${String(exp.date.getMonth() + 1).padStart(2, '0')}.${exp.date.getFullYear()}`,
-        amountStr: exp.amount.toString(),
-        currency: exp.currency,
-        fullComment: exp.fullComment,
-      };
-      const processedPart = initialProcessExpense(rawExpData, currentCategoriesToProcessWith);
-      return { id: exp.id, ...processedPart };
-    }).sort((a,b) => {
-      const timeA = a.date && !isNaN(a.date.getTime()) ? a.date.getTime() : 0;
-      const timeB = b.date && !isNaN(b.date.getTime()) ? b.date.getTime() : 0;
-      return timeB - timeA;
-    });
-    dispatch(addExpense(reProcessed));
+    const reProcessed = expenses
+      .filter(exp => exp && exp.date && !isNaN(exp.date.getTime()))
+      .map(exp => {
+        const rawExpData: RawExpenseData = { 
+          id: exp.id, 
+          dateStr: `${String(exp.date.getDate()).padStart(2, '0')}.${String(exp.date.getMonth() + 1).padStart(2, '0')}.${exp.date.getFullYear()}`,
+          amountStr: exp.amount.toString(),
+          currency: exp.currency,
+          fullComment: exp.fullComment,
+        };
+        const processedPart = initialProcessExpense(rawExpData, currentCategoriesToProcessWith);
+        return { id: exp.id, ...processedPart };
+      })
+      .sort((a, b) => {
+        const timeA = a.date && !isNaN(a.date.getTime()) ? a.date.getTime() : 0;
+        const timeB = b.date && !isNaN(b.date.getTime()) ? b.date.getTime() : 0;
+        return timeB - timeA;
+      });
+
+    if (reProcessed.length > 0) {
+      dispatch(addExpense(reProcessed));
+    }
   }, [expenses, dispatch]); 
 
   const handleProcessNewExpenses = useCallback((rawExpensesData: RawExpenseData[]) => {
+    if (!rawExpensesData || !categories) return;
+    
     const newProcessedExpenses = processRawExpenses(rawExpensesData, categories);
-    dispatch(addExpense(newProcessedExpenses));
+    if (newProcessedExpenses && newProcessedExpenses.length > 0) {
+      dispatch(addExpense(newProcessedExpenses));
+    }
   }, [categories, dispatch]);
 
   const handleAddMainCategory = useCallback((mainCategoryName: string): string | undefined => {
+    if (!mainCategoryName || !categories) return undefined;
+    
     const trimmedName = mainCategoryName.trim();
     if (!trimmedName) {
-        alert("Название основной категории не может быть пустым.");
-        return undefined;
+      alert("Название основной категории не может быть пустым.");
+      return undefined;
     }
     if (categories.find(c => c.name.toLowerCase() === trimmedName.toLowerCase())) {
       alert(`Основная категория с именем "${trimmedName}" уже существует.`);
@@ -69,38 +87,46 @@ const AppContent: React.FC = () => {
     const newCategoryId = uuidv4();
     const newOrder = categories.length > 0 ? Math.max(...categories.map(c => c.order)) + 1 : 0;
     const newCategoryToAdd: Category = { 
-        id: newCategoryId, 
-        name: trimmedName, 
-        order: newOrder, 
-        subCategories: [] 
+      id: newCategoryId, 
+      name: trimmedName, 
+      order: newOrder, 
+      subCategories: [] 
     };
     dispatch(addCategory(newCategoryToAdd));
     return newCategoryId;
   }, [categories, dispatch]);
   
   const handleUpdateMainCategoryName = useCallback((mainCategoryId: string, newName: string) => {
+    if (!mainCategoryId || !newName || !categories) return;
+    
     const trimmedName = newName.trim();
     if (!trimmedName) {
-        alert("Название основной категории не может быть пустым.");
-        return;
+      alert("Название основной категории не может быть пустым.");
+      return;
     }
     dispatch(removeCategory(mainCategoryId));
-    const updated = categories.map(c => c.id === mainCategoryId ? { ...c, name: trimmedName } : c).sort((a,b) => a.order - b.order);
+    const updated = categories
+      .map(c => c.id === mainCategoryId ? { ...c, name: trimmedName } : c)
+      .sort((a, b) => a.order - b.order);
     dispatch(addCategory(updated));
   }, [categories, dispatch]);
 
   const handleDeleteMainCategory = useCallback((mainCategoryId: string) => {
+    if (!mainCategoryId || !categories) return;
+    
     const categoryToDelete = categories.find(cat => cat.id === mainCategoryId);
     if (!categoryToDelete) return;
     
     dispatch(removeCategory(mainCategoryId));
    
     if (activeView === categoryToDelete.name) {
-        setActiveView(AppView.AllExpenses);
+      setActiveView(AppView.AllExpenses);
     }
   }, [categories, activeView, dispatch]);
 
   const handleAddSubCategory = useCallback((mainCategoryId: string, subCategoryName: string): string | undefined => {
+    if (!mainCategoryId || !subCategoryName || !categories) return undefined;
+    
     const trimmedName = subCategoryName.trim();
     if (!trimmedName) {
       alert("Название подкатегории не может быть пустым.");
@@ -110,51 +136,58 @@ const AppContent: React.FC = () => {
     let success = true;
     dispatch(removeCategory(mainCategoryId));
     const updatedCategories = categories.map(mc => {
-        if (mc.id === mainCategoryId) {
-            if (mc.subCategories.find(sc => sc.name.toLowerCase() === trimmedName.toLowerCase())) {
-                alert(`Подкатегория "${trimmedName}" уже существует в категории "${mc.name}".`);
-                success = false;
-                return mc;
-            }
-            const newSub: SubCategory = { id: newSubIdValue, name: trimmedName, keywords: [] };
-            return { ...mc, subCategories: [...mc.subCategories, newSub].sort((a,b) => a.name.localeCompare(b.name)) };
+      if (mc.id === mainCategoryId) {
+        if (mc.subCategories.find(sc => sc.name.toLowerCase() === trimmedName.toLowerCase())) {
+          alert(`Подкатегория "${trimmedName}" уже существует в категории "${mc.name}".`);
+          success = false;
+          return mc;
         }
-        return mc;
+        const newSub: SubCategory = { id: newSubIdValue, name: trimmedName, keywords: [] };
+        return { 
+          ...mc, 
+          subCategories: [...mc.subCategories, newSub].sort((a, b) => a.name.localeCompare(b.name)) 
+        };
+      }
+      return mc;
     });
     dispatch(addCategory(updatedCategories));
     return success ? newSubIdValue : undefined;
   }, [categories, dispatch]);
 
   const handleUpdateSubCategory = useCallback((mainCategoryId: string, subCategoryId: string, newName: string) => {
+    if (!mainCategoryId || !subCategoryId || !newName || !categories) return;
+    
     const trimmedName = newName.trim();
     if (!trimmedName) {
-        alert("Название подкатегории не может быть пустым.");
-        return;
+      alert("Название подкатегории не может быть пустым.");
+      return;
     }
     dispatch(removeCategory(mainCategoryId));
     const updatedCategories = categories.map(mc => {
-        if (mc.id === mainCategoryId) {
-            const oldSubCategory = mc.subCategories.find(sc => sc.id === subCategoryId);
-            if (mc.subCategories.find(sc => sc.id !== subCategoryId && sc.name.toLowerCase() === trimmedName.toLowerCase())) {
-                alert(`Подкатегория с именем "${trimmedName}" уже существует в категории "${mc.name}".`);
-                return mc;
-            }
-            if (oldSubCategory && oldSubCategory.name !== trimmedName) {
-                reProcessAllExpenses(updatedCategories);
-            }
-            return { 
-                ...mc, 
-                subCategories: mc.subCategories.map(sc => 
-                    sc.id === subCategoryId ? { ...sc, name: trimmedName } : sc
-                ).sort((a,b) => a.name.localeCompare(b.name))
-            };
+      if (mc.id === mainCategoryId) {
+        const oldSubCategory = mc.subCategories.find(sc => sc.id === subCategoryId);
+        if (mc.subCategories.find(sc => sc.id !== subCategoryId && sc.name.toLowerCase() === trimmedName.toLowerCase())) {
+          alert(`Подкатегория с именем "${trimmedName}" уже существует в категории "${mc.name}".`);
+          return mc;
         }
-        return mc;
+        if (oldSubCategory && oldSubCategory.name !== trimmedName) {
+          reProcessAllExpenses(updatedCategories);
+        }
+        return { 
+          ...mc, 
+          subCategories: mc.subCategories
+            .map(sc => sc.id === subCategoryId ? { ...sc, name: trimmedName } : sc)
+            .sort((a, b) => a.name.localeCompare(b.name))
+        };
+      }
+      return mc;
     });
     dispatch(addCategory(updatedCategories));
   }, [reProcessAllExpenses, dispatch]);
 
   const handleDeleteSubCategory = useCallback((mainCategoryId: string, subCategoryId: string) => {
+    if (!mainCategoryId || !subCategoryId || !categories) return;
+    
     const mainCat = categories.find(mc => mc.id === mainCategoryId);
     const subCat = mainCat?.subCategories.find(sc => sc.id === subCategoryId);
     
@@ -164,6 +197,8 @@ const AppContent: React.FC = () => {
   }, [categories, dispatch]);
 
   const handleAddKeywordToSubCategory = useCallback((mainCategoryId: string, subCategoryId: string, keyword: string) => {
+    if (!mainCategoryId || !subCategoryId || !keyword || !categories) return;
+    
     const trimmedKeyword = keyword.trim().toLowerCase();
     if (!trimmedKeyword) return;
     
@@ -189,7 +224,10 @@ const AppContent: React.FC = () => {
   }, [dispatch]);
 
   const handleDeleteKeywordFromSubCategory = useCallback((mainCategoryId: string, subCategoryId: string, keyword: string) => {
+    if (!mainCategoryId || !subCategoryId || !keyword || !categories) return;
+    
     const trimmedKeyword = keyword.trim().toLowerCase();
+    if (!trimmedKeyword) return;
     
     dispatch(removeCategory(mainCategoryId));
     const updatedCategories = categories.map(mc => {
@@ -219,6 +257,8 @@ const AppContent: React.FC = () => {
      targetMainCategoryId: string,
      targetSubCategoryId?: string,
      keywordToSave?: string) => {
+      if (!expenseId || !targetMainCategoryId || !expenses || !categories) return;
+      
       const trimmedKeywordToSave = keywordToSave?.trim().toLowerCase();
       if (!trimmedKeywordToSave) return;
 
@@ -257,6 +297,8 @@ const AppContent: React.FC = () => {
     }, [expenses, categories, reProcessAllExpenses, dispatch]);
 
   const renderCurrentView = () => {
+    if (!expenses || !categories) return null;
+
     switch (activeView) {
       case AppView.Management:
         return (
