@@ -1,17 +1,22 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { RawExpenseData, Category, ProcessedExpense, AppView, SubCategory } from './types';
 import { USER_REQUESTED_DEFAULT_CATEGORIES } from './constants'; 
 import { processRawExpenses, initialProcessExpense } from './services/categorizationService'; 
+import { syncService } from './services/syncService';
 import ExpenseInput from './components/ExpenseInput';
 import CategoryManagement from './components/CategoryManagement';
 import UncategorizedLog from './components/UncategorizedLog';
 import ExpenseDisplayTable from './components/ExpenseDisplayTable';
 import TabsNavigator from './components/TabsNavigator';
 import { TrashIcon } from './components/icons';
+import SyncStatus from './components/SyncStatus';
 
 const App: React.FC = () => {
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
+  const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
+  const [syncError, setSyncError] = useState<string | null>(null);
+
   const [categories, setCategories] = useState<Category[]>(() => {
     const savedCategories = localStorage.getItem('expenseTrackerCategories');
     try {
@@ -19,7 +24,6 @@ const App: React.FC = () => {
             let parsed = JSON.parse(savedCategories) as Category[];
             if (Array.isArray(parsed) && parsed.every(item => item && typeof item.id === 'string' && typeof item.name === 'string')) {
                  console.log("DEBUG: Initializing categories from localStorage.");
-                 // Ensure order property exists and is a number, then sort
                  parsed = parsed.map((cat, index) => ({
                     ...cat,
                     order: (typeof cat.order === 'number' && !isNaN(cat.order)) ? cat.order : index,
@@ -69,6 +73,47 @@ const App: React.FC = () => {
      return [];
   });
   const [currentView, setCurrentView] = useState<string>(AppView.Management);
+
+  // Функция для синхронизации данных с сервером
+  const syncWithServer = useCallback(async () => {
+    try {
+      setSyncStatus('syncing');
+      setSyncError(null);
+
+      const result = await syncService.saveData({
+        expenses: allExpenses,
+        categories,
+        lastSync: lastSyncTime
+      });
+
+      if (!result.success) {
+        // Если данные устарели, получаем актуальные данные
+        const serverData = await syncService.getData();
+        setAllExpenses(serverData.expenses);
+        setCategories(serverData.categories);
+        setLastSyncTime(serverData.lastSync);
+      } else {
+        setLastSyncTime(result.lastSync);
+      }
+
+      setSyncStatus('idle');
+    } catch (error) {
+      console.error('Sync error:', error);
+      setSyncStatus('error');
+      setSyncError(error instanceof Error ? error.message : 'Unknown error');
+    }
+  }, [allExpenses, categories, lastSyncTime]);
+
+  // Периодическая синхронизация
+  useEffect(() => {
+    const syncInterval = setInterval(syncWithServer, 30000); // каждые 30 секунд
+    return () => clearInterval(syncInterval);
+  }, [syncWithServer]);
+
+  // Начальная синхронизация при загрузке
+  useEffect(() => {
+    syncWithServer();
+  }, []);
 
   useEffect(() => {
     // Sort categories by order before saving to ensure consistency
@@ -533,21 +578,26 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-gray-800 p-4 md:p-8">
-      <header className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-indigo-700 tracking-tight">Трекер Расходов</h1>
-        <p className="text-lg text-slate-600 mt-1">Управляйте своими финансами с легкостью</p>
-      </header>
-      
-      <TabsNavigator currentView={currentView} onSelectView={setCurrentView} availableViews={uniqueViews} />
-      
-      <main className="mt-6">
-        {renderCurrentView()}
-      </main>
+    <div className="min-h-screen bg-gray-100">
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold mb-8">Expense Tracker</h1>
+        
+        <div className="mb-4">
+          <SyncStatus
+            status={syncStatus}
+            error={syncError}
+            lastSyncTime={lastSyncTime}
+          />
+        </div>
 
-      <footer className="mt-12 text-center text-sm text-slate-500">
-        <p>&copy; {new Date().getFullYear()} React Expense Tracker. Вдохновлено Google Sheets.</p>
-      </footer>
+        <TabsNavigator
+          currentView={currentView}
+          onViewChange={setCurrentView}
+          categories={categories}
+        />
+
+        {renderCurrentView()}
+      </div>
     </div>
   );
 };
