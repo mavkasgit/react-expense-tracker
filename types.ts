@@ -16,9 +16,9 @@ export interface SubCategory {
 
 export interface Category {
   id: string;
-  name: string; // Main category name
-  order: number; // For reordering main categories
-  subCategories: SubCategory[];
+  name: string;
+  subCategories: string[];
+  keywords: string[];
 }
 
 export interface ProcessedExpense {
@@ -52,6 +52,8 @@ export interface Expense {
   subCategory?: string;
   date: string;
   description?: string;
+  rawText?: string;
+  confidence?: number;
 }
 
 export interface SyncData {

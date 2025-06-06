@@ -571,6 +571,21 @@ const App: React.FC = () => {
     }
   };
 
+  // Сохраняем данные в localStorage и синхронизируем с сервером
+  useEffect(() => {
+    if (allExpenses.length > 0) {
+      localStorage.setItem('expenseTrackerExpenses', JSON.stringify(allExpenses));
+      syncWithServer(); // Синхронизируем при изменении расходов
+    }
+  }, [allExpenses]);
+
+  useEffect(() => {
+    if (categories.length > 0) {
+      localStorage.setItem('expenseTrackerCategories', JSON.stringify(categories));
+      syncWithServer(); // Синхронизируем при изменении категорий
+    }
+  }, [categories]);
+
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="container mx-auto px-4 py-8">
