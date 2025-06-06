@@ -1,58 +1,55 @@
-import { ProcessedExpense, Category } from '../types';
+import { Expense, Category } from '../types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || 'test-key';
-
-interface SyncData {
-  expenses: ProcessedExpense[];
-  categories: Category[];
-  lastSync: number;
-}
+const API_URL = '/api/sync';
+const API_KEY = 'test-key-123'; // Временный ключ для тестирования
 
 export const syncService = {
-  async getData(): Promise<SyncData> {
+  async fetchData() {
     try {
-      const response = await fetch(`${API_URL}/sync`, {
+      const response = await fetch(API_URL, {
         headers: {
           'x-api-key': API_KEY
         }
       });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch data');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-      return await response.json();
+      
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error('Error fetching data:', error);
       throw error;
     }
   },
 
-  async saveData(data: SyncData): Promise<{ success: boolean; lastSync: number }> {
+  async saveData(expenses: Expense[], categories: Category[], lastSync: number) {
     try {
-      const response = await fetch(`${API_URL}/sync`, {
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': API_KEY
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+          expenses,
+          categories,
+          lastSync
+        })
       });
 
       if (!response.ok) {
         if (response.status === 409) {
-          // Данные устарели, получаем актуальные данные
-          const currentData = await response.json();
-          return {
-            success: false,
-            lastSync: currentData.lastSync
-          };
+          // Конфликт данных - получаем актуальные данные
+          const conflictData = await response.json();
+          return conflictData;
         }
-        throw new Error('Failed to save data');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error('Error saving data:', error);
       throw error;

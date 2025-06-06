@@ -1,4 +1,3 @@
-
 export interface RawExpenseData {
   id: string;
   dateStr: string; // Should always be DD.MM.YYYY
@@ -45,3 +44,20 @@ export enum AppView {
 // Note: Other category names will be strings, not enum members.
 // The currentView in App.tsx will be of type string.
 // Tabs will be generated from AppView.Management, AppView.AllExpenses, and category names.
+
+export interface Expense {
+  id: string;
+  amount: number;
+  category: string;
+  subCategory?: string;
+  date: string;
+  description?: string;
+}
+
+export interface SyncData {
+  expenses: Expense[];
+  categories: Category[];
+  lastSync: number;
+}
+
+export type SyncStatus = 'idle' | 'syncing' | 'error';

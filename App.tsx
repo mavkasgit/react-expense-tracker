@@ -75,34 +75,28 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<string>(AppView.Management);
 
   // Функция для синхронизации данных с сервером
-  const syncWithServer = useCallback(async () => {
+  const syncWithServer = async () => {
     try {
       setSyncStatus('syncing');
-      setSyncError(null);
-
-      const result = await syncService.saveData({
-        expenses: allExpenses,
-        categories,
-        lastSync: lastSyncTime
-      });
-
-      if (!result.success) {
-        // Если данные устарели, получаем актуальные данные
-        const serverData = await syncService.getData();
-        setAllExpenses(serverData.expenses);
-        setCategories(serverData.categories);
-        setLastSyncTime(serverData.lastSync);
+      const result = await syncService.saveData(allExpenses, categories, lastSyncTime);
+      
+      if (result.error === 'Data is outdated') {
+        // Если данные устарели, обновляем локальные данные
+        setAllExpenses(result.currentData.expenses);
+        setCategories(result.currentData.categories);
+        setLastSyncTime(result.currentData.lastSync);
       } else {
         setLastSyncTime(result.lastSync);
       }
-
+      
       setSyncStatus('idle');
+      setSyncError(null);
     } catch (error) {
       console.error('Sync error:', error);
       setSyncStatus('error');
       setSyncError(error instanceof Error ? error.message : 'Unknown error');
     }
-  }, [allExpenses, categories, lastSyncTime]);
+  };
 
   // Периодическая синхронизация
   useEffect(() => {
