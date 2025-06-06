@@ -240,45 +240,44 @@ const AppContent: React.FC = () => {
     dispatch(addCategory(updatedCategories));
   }, [reProcessAllExpenses, dispatch]);
 
-  const handleCategorizeUnidentifiedExpense = useCallback((
-    expenseId: string, 
-    targetMainCategoryId: string,
-    targetSubCategoryId?: string,
-    keywordToSave?: string
-  ) => {
-    const trimmedKeywordToSave = keywordToSave?.trim().toLowerCase();
+  const handleCategorizeUnidentifiedExpense = useCallback(
+    (expenseId: string, 
+     targetMainCategoryId: string,
+     targetSubCategoryId?: string,
+     keywordToSave?: string) => {
+      const trimmedKeywordToSave = keywordToSave?.trim().toLowerCase();
 
-    if (trimmedKeywordToSave && targetMainCategoryId && targetSubCategoryId) {
-        console.log(`DEBUG: Attempting to save keyword "${trimmedKeywordToSave}" to MainCatID: ${targetMainCategoryId}, SubCatID: ${targetSubCategoryId}`);
-        handleAddKeywordToSubCategory(targetMainCategoryId, targetSubCategoryId, trimmedKeywordToSave);
-    } else if (trimmedKeywordToSave && targetMainCategoryId && !targetSubCategoryId) {
-         console.warn(`DEBUG: Keyword "${trimmedKeywordToSave}" provided for main category ${targetMainCategoryId}, but no subcategory selected. Keyword not saved.`);
-    }
+      if (trimmedKeywordToSave && targetMainCategoryId && targetSubCategoryId) {
+          console.log(`DEBUG: Attempting to save keyword "${trimmedKeywordToSave}" to MainCatID: ${targetMainCategoryId}, SubCatID: ${targetSubCategoryId}`);
+          handleAddKeywordToSubCategory(targetMainCategoryId, targetSubCategoryId, trimmedKeywordToSave);
+      } else if (trimmedKeywordToSave && targetMainCategoryId && !targetSubCategoryId) {
+           console.warn(`DEBUG: Keyword "${trimmedKeywordToSave}" provided for main category ${targetMainCategoryId}, but no subcategory selected. Keyword not saved.`);
+      }
 
-    dispatch(removeExpense(expenseId));
-    const updatedExpenses = expenses.map(exp => {
-      if (exp.id === expenseId) {
-        return { 
-          ...exp, 
-          categoryId: targetMainCategoryId,
-          subCategoryId: targetSubCategoryId,
-          isUnidentified: false 
-        };
-      }
-      if (exp.isUnidentified && exp.fullComment.toLowerCase() === trimmedKeywordToSave?.toLowerCase()) {
-        console.log(`DEBUG: Auto-categorizing expense ID ${exp.id} due to matching comment (case-insensitive): "${trimmedKeywordToSave}"`);
-        return {
-          ...exp,
-          categoryId: targetMainCategoryId,
-          subCategoryId: targetSubCategoryId,
-          isUnidentified: false
-        };
-      }
-      return exp;
-    }).sort((a,b) => b.date.getTime() - a.date.getTime());
-    
-    dispatch(addExpense(updatedExpenses));
-  }, [expenses, handleAddKeywordToSubCategory, dispatch]);
+      dispatch(removeExpense(expenseId));
+      const updatedExpenses = expenses.map(exp => {
+        if (exp.id === expenseId) {
+          return { 
+            ...exp, 
+            categoryId: targetMainCategoryId,
+            subCategoryId: targetSubCategoryId,
+            isUnidentified: false 
+          };
+        }
+        if (exp.isUnidentified && exp.fullComment.toLowerCase() === trimmedKeywordToSave?.toLowerCase()) {
+          console.log(`DEBUG: Auto-categorizing expense ID ${exp.id} due to matching comment (case-insensitive): "${trimmedKeywordToSave}"`);
+          return {
+            ...exp,
+            categoryId: targetMainCategoryId,
+            subCategoryId: targetSubCategoryId,
+            isUnidentified: false
+          };
+        }
+        return exp;
+      }).sort((a,b) => b.date.getTime() - a.date.getTime());
+      
+      dispatch(addExpense(updatedExpenses));
+    }, [expenses, handleAddKeywordToSubCategory, dispatch]);
 
   const handleDeleteExpensePermanently = useCallback((expenseId: string) => {
     console.log(`DEBUG: Deleting expense permanently with ID: ${expenseId}`);
